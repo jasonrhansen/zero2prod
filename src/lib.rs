@@ -4,11 +4,12 @@ use axum::{routing::get, Router};
 use axum::{BoxError, Server};
 use hyper::server::conn::AddrIncoming;
 use hyper::StatusCode;
-use std::net::SocketAddr;
+use std::net::TcpListener;
 
-pub fn run() -> Result<Server<AddrIncoming, IntoMakeService<Router>>, BoxError> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
-    let server = axum::Server::bind(&addr).serve(app().into_make_service());
+pub fn run(
+    listener: TcpListener,
+) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, BoxError> {
+    let server = axum::Server::from_tcp(listener)?.serve(app().into_make_service());
 
     Ok(server)
 }
