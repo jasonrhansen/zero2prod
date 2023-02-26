@@ -6,7 +6,10 @@ use hyper::server::conn::AddrIncoming;
 use hyper::{Method, StatusCode, Uri};
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::request_id::MakeRequestUuid;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tower_http::ServiceBuilderExt;
+use tracing::Level;
 
 use std::net::TcpListener;
 use std::time::Duration;
@@ -23,8 +26,19 @@ fn app(shared_state: AppState) -> Router {
         .load_shed()
         // Process at most 100 requests concurrently
         .concurrency_limit(100)
+        // Set request id before the tra layer so it ends up in the logs.
+        .set_x_request_id(MakeRequestUuid)
         // Tracing
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(
+                    DefaultMakeSpan::new()
+                        .level(Level::INFO)
+                        .include_headers(true),
+                )
+                .on_response(DefaultOnResponse::new().include_headers(true)),
+        )
+        .propagate_x_request_id()
         // Compress response bodies
         .layer(CompressionLayer::new());
 
