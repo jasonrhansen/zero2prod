@@ -6,7 +6,7 @@ use zero2prod::{app_state::AppState, configuration::get_configuration, startup::
 
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
-    let subscriber = telemetry::get_subscriber("zero2prod".into(), "info".into());
+    let subscriber = telemetry::get_subscriber("zero2prod".into(), "info".into(), std::io::stdout);
     telemetry::init_subscriber(subscriber);
 
     let config = get_configuration().expect("Failed to read configuration.");
