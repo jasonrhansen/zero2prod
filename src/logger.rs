@@ -1,19 +1,19 @@
+use tracing::subscriber::set_global_default;
+use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+use tracing_subscriber::{EnvFilter, Registry};
 
 pub fn initialize() {
-    let format = tracing_subscriber::fmt::format()
-        .without_time()
-        .with_target(false)
-        .with_level(false)
-        .compact();
-
-    let filter = EnvFilter::builder()
+    let filter_layer = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy();
+    let formatting_layer = BunyanFormattingLayer::new("zero2prod".into(), std::io::stdout);
 
-    tracing_subscriber::fmt::fmt()
-        .with_env_filter(filter)
-        .event_format(format)
-        .init();
+    let subscriber = Registry::default()
+        .with(filter_layer)
+        .with(JsonStorageLayer)
+        .with(formatting_layer);
+
+    set_global_default(subscriber).expect("Failed to set tracing subscriber");
 }
