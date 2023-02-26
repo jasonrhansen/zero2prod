@@ -17,13 +17,14 @@ pub struct DatabaseSettings {
 }
 
 impl DatabaseSettings {
-    pub fn connection_string(&self) -> String {
+    pub fn connection_string(&self) -> Secret<String> {
         let Self { database_name, .. } = self;
         let connection_string = self.connection_string_without_db();
-        format!("{connection_string}/{database_name}")
+        let connection_string = connection_string.expose_secret();
+        Secret::new(format!("{connection_string}/{database_name}"))
     }
 
-    pub fn connection_string_without_db(&self) -> String {
+    pub fn connection_string_without_db(&self) -> Secret<String> {
         let Self {
             username,
             password,
@@ -32,7 +33,7 @@ impl DatabaseSettings {
             ..
         } = self;
         let password = password.expose_secret();
-        format!("postgres://{username}:{password}@{host}:{port}")
+        Secret::new(format!("postgres://{username}:{password}@{host}:{port}"))
     }
 }
 
