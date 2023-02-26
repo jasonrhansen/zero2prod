@@ -2,7 +2,8 @@ use axum::{debug_handler, extract::State, response::IntoResponse, Form};
 use chrono::Utc;
 use hyper::StatusCode;
 use serde::Deserialize;
-use tracing::{error, info, info_span, Instrument};
+use sqlx::PgPool;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
@@ -13,22 +14,35 @@ pub struct SubscriptionFormData {
     name: String,
 }
 
+#[tracing::instrument(
+    name = "Adding a new subscriber",
+    skip(state, form),
+    fields(
+        request_id = %Uuid::new_v4(),
+        subscriber_email = %form.email,
+        subscriber_name = %form.name
+    )
+)]
 #[debug_handler]
 pub async fn subscribe(
     State(state): State<AppState>,
     Form(form): Form<SubscriptionFormData>,
 ) -> impl IntoResponse {
-    let request_id = Uuid::new_v4();
-    let subscribe_span = info_span!(
-        "Adding a new subscriber",
-        %request_id,
-        subscriber_email = %form.email,
-        subscriber_name = %form.name
-    );
-    let _subscribe_span_guard = subscribe_span.enter();
+    insert_subscriber(&state.connection_pool, &form)
+        .await
+        .map(|_| StatusCode::OK)
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
 
-    let query_span = info_span!("Saving new subscriber details in the database");
-    let result = sqlx::query!(
+#[tracing::instrument(
+    name = "Saving new subscriber details in the database",
+    skip(pool, form)
+)]
+pub async fn insert_subscriber(
+    pool: &PgPool,
+    form: &SubscriptionFormData,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
         VALUES ($1, $2, $3, $4)
@@ -38,15 +52,11 @@ pub async fn subscribe(
         form.name,
         Utc::now()
     )
-    .execute(&state.connection_pool)
-    .instrument(query_span)
-    .await;
-
-    if let Err(e) = result {
+    .execute(pool)
+    .await
+    .map(|_| ())
+    .map_err(|e| {
         error!("Failed to execute query: {:?}", e);
-        return StatusCode::INTERNAL_SERVER_ERROR;
-    }
-
-    info!("New subscriber details have been saved");
-    StatusCode::OK
+        e
+    })
 }
