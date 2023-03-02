@@ -1,11 +1,13 @@
 mod common;
 
+use common::spawn_app;
+
 use hyper::StatusCode;
 use sqlx;
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
-    let test_app = common::spawn_app().await;
+    let test_app = spawn_app().await;
     let client = reqwest::Client::new();
 
     let body = "name=Le%20Guin&email=ursula_le_guin%40gmail.com";
@@ -30,7 +32,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
 #[tokio::test]
 async fn subscribe_returns_a_422_when_data_is_missing() {
-    let test_app = common::spawn_app().await;
+    let test_app = spawn_app().await;
     let client = reqwest::Client::new();
 
     let test_cases = vec![
@@ -51,8 +53,37 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
         assert_eq!(
             StatusCode::UNPROCESSABLE_ENTITY,
             response.status().as_u16(),
-            "The API did not fail with 400 Bad Request when the payload was {}.",
+            "The API did not fail with 422 Unprocessable Entity when the payload was {}.",
             error_message
+        );
+    }
+}
+
+#[tokio::test]
+async fn subscribe_returns_a_422_when_fields_are_present_but_invalid() {
+    let test_app = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    let test_cases = vec![
+        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
+        ("name=Ursula&email=", "empty email"),
+        ("name=Ursula&email=definitely-not-an-email", "invalid email"),
+    ];
+
+    for (body, description) in test_cases {
+        let response = client
+            .post(&format!("{}/subscriptions", &test_app.address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute request.");
+
+        assert_eq!(
+            422,
+            response.status().as_u16(),
+            "The API did not return a 422 Unprocessable Entity when the payload was {}.",
+            description
         );
     }
 }

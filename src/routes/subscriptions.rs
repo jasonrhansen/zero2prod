@@ -1,12 +1,14 @@
-use axum::{debug_handler, extract::State, response::IntoResponse, Form};
+use axum::{debug_handler, extract::State, Form};
 use chrono::Utc;
 use hyper::StatusCode;
 use serde::Deserialize;
 use sqlx::PgPool;
-use tracing::error;
 use uuid::Uuid;
 
-use crate::app_state::AppState;
+use crate::{
+    app_state::AppState,
+    domain::{NewSubscriber, SubscriberEmail, SubscriberName},
+};
 
 #[derive(Deserialize)]
 pub struct SubscriptionFormData {
@@ -26,20 +28,26 @@ pub struct SubscriptionFormData {
 pub async fn subscribe(
     State(state): State<AppState>,
     Form(form): Form<SubscriptionFormData>,
-) -> impl IntoResponse {
-    insert_subscriber(&state.connection_pool, &form)
+) -> Result<StatusCode, (StatusCode, String)> {
+    let new_subscriber = NewSubscriber {
+        email: SubscriberEmail::parse(form.email)
+            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?,
+        name: SubscriberName::parse(form.name)
+            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?,
+    };
+    insert_subscriber(&state.connection_pool, &new_subscriber)
         .await
         .map(|_| StatusCode::OK)
-        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))
 }
 
 #[tracing::instrument(
     name = "Saving new subscriber details in the database",
-    skip(pool, form)
+    skip(pool, new_subscriber)
 )]
 pub async fn insert_subscriber(
     pool: &PgPool,
-    form: &SubscriptionFormData,
+    new_subscriber: &NewSubscriber,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
@@ -47,15 +55,11 @@ pub async fn insert_subscriber(
         VALUES ($1, $2, $3, $4)
         "#,
         Uuid::new_v4(),
-        form.email,
-        form.name,
+        new_subscriber.email.as_ref(),
+        new_subscriber.name.as_ref(),
         Utc::now()
     )
     .execute(pool)
     .await
     .map(|_| ())
-    .map_err(|e| {
-        error!("Failed to execute query: {:?}", e);
-        e
-    })
 }
