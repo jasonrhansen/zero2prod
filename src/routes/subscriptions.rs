@@ -7,6 +7,7 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
+    app_error::AppError,
     app_state::AppState,
     domain::{NewSubscriber, SubscriberEmail, SubscriberName},
     email_client::EmailClient,
@@ -40,33 +41,23 @@ impl TryFrom<SubscriptionFormData> for NewSubscriber {
 pub async fn subscribe<E>(
     State(state): State<AppState<E>>,
     Form(form): Form<SubscriptionFormData>,
-) -> Result<StatusCode, (StatusCode, String)>
+) -> Result<StatusCode, AppError>
 where
     E: EmailClient + Clone,
 {
-    let new_subscriber: NewSubscriber = form
-        .try_into()
-        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
+    let new_subscriber: NewSubscriber = match form.try_into() {
+        Ok(s) => s,
+        Err(_) => return Ok(StatusCode::UNPROCESSABLE_ENTITY),
+    };
 
-    let mut transaction = state
-        .db_pool
-        .begin()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))?;
+    let mut transaction = state.db_pool.begin().await?;
 
-    let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))?;
+    let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber).await?;
 
     let subscription_token = generate_subscription_token();
-    store_token(&mut transaction, subscriber_id, &subscription_token)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))?;
+    store_token(&mut transaction, subscriber_id, &subscription_token).await?;
 
-    transaction
-        .commit()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))?;
+    transaction.commit().await?;
 
     send_confirmation_email(
         state.email_client,
@@ -74,9 +65,9 @@ where
         &state.base_url,
         &subscription_token,
     )
-    .await
-    .map(|_| StatusCode::OK)
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))
+    .await?;
+
+    Ok(StatusCode::OK)
 }
 
 #[tracing::instrument(

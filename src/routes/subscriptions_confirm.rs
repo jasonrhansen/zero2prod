@@ -4,7 +4,7 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{app_state::AppState, email_client::EmailClient};
+use crate::{app_error::AppError, app_state::AppState, email_client::EmailClient};
 
 #[derive(Deserialize)]
 pub struct SubscriptionsConfirmParams {
@@ -15,23 +15,19 @@ pub struct SubscriptionsConfirmParams {
 pub async fn confirm<E>(
     State(state): State<AppState<E>>,
     Query(params): Query<SubscriptionsConfirmParams>,
-) -> Result<StatusCode, (StatusCode, String)>
+) -> Result<StatusCode, AppError>
 where
     E: EmailClient + Clone,
 {
-    let subscriber_id = get_subscriber_id_from_token(&state.db_pool, &params.subscription_token)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))?
-        .ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                format!("Invalid token: {}", params.subscription_token),
-            )
-        })?;
+    let subscriber_id =
+        get_subscriber_id_from_token(&state.db_pool, &params.subscription_token).await?;
 
-    confirm_subscriber(&state.db_pool, subscriber_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))?;
+    let subscriber_id = match subscriber_id {
+        Some(id) => id,
+        None => return Ok(StatusCode::UNAUTHORIZED),
+    };
+
+    confirm_subscriber(&state.db_pool, subscriber_id).await?;
 
     Ok(StatusCode::OK)
 }

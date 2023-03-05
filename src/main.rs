@@ -9,17 +9,15 @@ use zero2prod::{
 };
 
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() {
     let subscriber = telemetry::get_subscriber("zero2prod".into(), "info".into(), std::io::stdout);
     telemetry::init_subscriber(subscriber);
 
     let config = get_configuration().expect("Failed to read configuration");
     let email_client = setup_email_client(&config);
 
-    let application = Application::build(config, email_client).await?;
-    application.run_until_stopped().await?;
-
-    Ok(())
+    let application = Application::build(config, email_client).await.unwrap();
+    application.run_until_stopped().await.unwrap();
 }
 
 fn setup_email_client(config: &Settings) -> SmtpEmailClient {
