@@ -1,14 +1,12 @@
 use axum::async_trait;
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
-use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::{
-    app_state::AppState,
     configuration::{get_configuration, DatabaseSettings},
     domain::SubscriberEmail,
     email_client::EmailClient,
-    startup::run,
+    startup::Application,
     telemetry,
 };
 
@@ -50,22 +48,20 @@ impl EmailClient for TestEmailClient {
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
-    let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
-
     let mut config = get_configuration().expect("Failed to read configuration.");
+    config.application.host = "127.0.0.1".to_string();
+    config.application.port = 0;
     config.database.database_name = Uuid::new_v4().to_string();
     let connection_pool = configure_database(&config.database).await;
 
-    let app_state = AppState {
-        connection_pool: connection_pool.clone(),
-        email_client: TestEmailClient {},
-    };
+    let email_client = TestEmailClient {};
 
-    let server = run(listener, app_state).expect("Failed to bind to address");
+    let application = Application::build(config.clone(), email_client)
+        .await
+        .expect("Failed to build application");
 
-    tokio::spawn(server);
+    let address = format!("http://127.0.0.1:{}", application.port());
+    let _ = tokio::spawn(application.run_until_stopped());
 
     TestApp {
         address,

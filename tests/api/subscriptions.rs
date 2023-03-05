@@ -1,9 +1,7 @@
-mod common;
-
-use common::spawn_app;
-
 use hyper::StatusCode;
 use sqlx;
+
+use crate::helpers::spawn_app;
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {

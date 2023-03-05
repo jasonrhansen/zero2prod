@@ -1,14 +1,10 @@
-use std::{net::TcpListener, time::Duration};
-
 use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
 use secrecy::ExposeSecret;
-use sqlx::postgres::PgPoolOptions;
 use zero2prod::{
-    app_state::AppState,
     configuration::{get_configuration, Settings},
     domain::SubscriberEmail,
     email_client::SmtpEmailClient,
-    startup::run,
+    startup::Application,
     telemetry,
 };
 
@@ -18,23 +14,10 @@ async fn main() -> Result<(), anyhow::Error> {
     telemetry::init_subscriber(subscriber);
 
     let config = get_configuration().expect("Failed to read configuration");
-
-    let connection_pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::from_secs(2))
-        .connect_lazy_with(config.database.with_db());
-
     let email_client = setup_email_client(&config);
 
-    let address = format!("{}:{}", config.application.host, config.application.port);
-    let listener = TcpListener::bind(address)?;
-    run(
-        listener,
-        AppState {
-            connection_pool,
-            email_client,
-        },
-    )?
-    .await?;
+    let application = Application::build(config, email_client).await?;
+    application.run_until_stopped().await?;
 
     Ok(())
 }

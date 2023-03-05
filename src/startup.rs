@@ -4,6 +4,8 @@ use axum::{routing::get, Router};
 use axum::{BoxError, Server};
 use hyper::server::conn::AddrIncoming;
 use hyper::{Method, StatusCode, Uri};
+use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tower_http::request_id::MakeRequestUuid;
@@ -15,8 +17,51 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 use crate::app_state::AppState;
+use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
 use crate::routes;
+
+pub struct Application {
+    port: u16,
+    server: Server<AddrIncoming, IntoMakeService<Router>>,
+}
+
+impl Application {
+    pub async fn build<E>(config: Settings, email_client: E) -> Result<Self, anyhow::Error>
+    where
+        E: EmailClient + Clone + Send + Sync + 'static,
+    {
+        let connection_pool = get_connection_pool(&config.database);
+        let address = format!("{}:{}", config.application.host, config.application.port);
+        let listener = TcpListener::bind(address)?;
+        let port = listener.local_addr().unwrap().port();
+        let server = run(
+            listener,
+            AppState {
+                connection_pool,
+                email_client,
+            },
+        )?;
+
+        Ok(Self { port, server })
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    pub async fn run_until_stopped(self) -> Result<(), anyhow::Error> {
+        self.server.await?;
+
+        Ok(())
+    }
+}
+
+pub fn get_connection_pool(config: &DatabaseSettings) -> PgPool {
+    PgPoolOptions::new()
+        .acquire_timeout(Duration::from_secs(2))
+        .connect_lazy_with(config.with_db())
+}
 
 fn app<E>(shared_state: AppState<E>) -> Router
 where
