@@ -1,5 +1,9 @@
+use std::sync::{Arc, Mutex};
+
 use axum::async_trait;
+use linkify::Link;
 use once_cell::sync::Lazy;
+use reqwest::Url;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use zero2prod::{
@@ -27,7 +31,9 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 
 pub struct TestApp {
     pub address: String,
-    pub connection_pool: PgPool,
+    pub port: u16,
+    pub db_pool: PgPool,
+    pub email_server: Arc<Mutex<TestEmailServer>>,
 }
 
 impl TestApp {
@@ -40,21 +46,54 @@ impl TestApp {
             .await
             .expect("Failed to execute request.")
     }
+
+    pub fn confirmation_link(&self) -> Url {
+        let email_server = self.email_server.lock().unwrap();
+        let mut confirmation_link =
+            Url::parse(get_links(&email_server.sends[0].html_content)[0].as_str()).unwrap();
+
+        assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
+
+        // Rewrite URL to use test port.
+        confirmation_link.set_port(Some(self.port)).unwrap();
+
+        confirmation_link
+    }
 }
 
-#[derive(Clone)]
-pub struct TestEmailClient {}
+#[derive(Clone, Default)]
+pub struct TestEmailClient {
+    inner: Arc<Mutex<TestEmailServer>>,
+}
 
 #[async_trait]
 impl EmailClient for TestEmailClient {
     async fn send_email(
         &self,
-        _recipient: SubscriberEmail,
-        _subject: &str,
-        _html_content: &str,
+        recipient: SubscriberEmail,
+        subject: &str,
+        html_content: &str,
     ) -> Result<(), anyhow::Error> {
+        self.inner.lock().unwrap().sends.push(TestEmail {
+            recipient,
+            subject: subject.to_owned(),
+            html_content: html_content.to_owned(),
+        });
+
         Ok(())
     }
+}
+
+#[derive(Clone)]
+pub struct TestEmail {
+    pub recipient: SubscriberEmail,
+    pub subject: String,
+    pub html_content: String,
+}
+
+#[derive(Clone, Default)]
+pub struct TestEmailServer {
+    pub sends: Vec<TestEmail>,
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -66,18 +105,22 @@ pub async fn spawn_app() -> TestApp {
     config.database.database_name = Uuid::new_v4().to_string();
     let connection_pool = configure_database(&config.database).await;
 
-    let email_client = TestEmailClient {};
+    let email_client = TestEmailClient::default();
+    let email_client_inner = Arc::clone(&email_client.inner);
 
     let application = Application::build(config.clone(), email_client)
         .await
         .expect("Failed to build application");
+    let application_port = application.port();
 
     let address = format!("http://127.0.0.1:{}", application.port());
     let _ = tokio::spawn(application.run_until_stopped());
 
     TestApp {
         address,
-        connection_pool,
+        port: application_port,
+        db_pool: connection_pool,
+        email_server: email_client_inner,
     }
 }
 
@@ -99,4 +142,11 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to migrate the database");
 
     connection_pool
+}
+
+pub fn get_links(html_text: &str) -> Vec<Link> {
+    linkify::LinkFinder::new()
+        .links(html_text)
+        .filter(|l| *l.kind() == linkify::LinkKind::Url)
+        .collect()
 }

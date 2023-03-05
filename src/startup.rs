@@ -31,15 +31,16 @@ impl Application {
     where
         E: EmailClient + Clone + Send + Sync + 'static,
     {
-        let connection_pool = get_connection_pool(&config.database);
+        let db_pool = get_connection_pool(&config.database);
         let address = format!("{}:{}", config.application.host, config.application.port);
         let listener = TcpListener::bind(address)?;
         let port = listener.local_addr().unwrap().port();
         let server = run(
             listener,
             AppState {
-                connection_pool,
+                db_pool,
                 email_client,
+                base_url: config.application.base_url,
             },
         )?;
 
@@ -91,12 +92,14 @@ where
         // Compress response bodies
         .layer(CompressionLayer::new());
 
+    let with_state = Router::new()
+        .route("/subscriptions", post(routes::subscribe))
+        .route("/subscriptions/confirm", get(routes::confirm))
+        .with_state(shared_state);
+
     Router::new()
         .route("/health_check", get(routes::health_check))
-        .route(
-            "/subscriptions",
-            post(routes::subscribe).with_state(shared_state),
-        )
+        .merge(with_state)
         .layer(middleware_stack)
 }
 

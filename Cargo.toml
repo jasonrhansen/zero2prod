@@ -30,6 +30,7 @@ unicode-segmentation = "1.10.1"
 validator = "0.16"
 lettre = { version = "0.10", default-features=false, features = ["smtp-transport", "pool", "hostname", "builder", "tokio1-rustls-tls"] }
 anyhow = "1.0"
+rand = { version = "0.8", features = ["std_rng"] }
 
 [dependencies.sqlx]
 version = "0.6"
@@ -55,3 +56,4 @@ claims = "0.7"
 fake = "~2.3"
 quickcheck = "0.9"
 quickcheck_macros = "0.9"
+linkify = "0.9"
