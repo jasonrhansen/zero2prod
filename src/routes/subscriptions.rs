@@ -1,4 +1,4 @@
-use axum::{debug_handler, extract::State, Form};
+use axum::{extract::State, Form};
 use chrono::Utc;
 use hyper::StatusCode;
 use serde::Deserialize;
@@ -8,12 +8,24 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     domain::{NewSubscriber, SubscriberEmail, SubscriberName},
+    email_client::EmailClient,
 };
 
 #[derive(Deserialize)]
 pub struct SubscriptionFormData {
     email: String,
     name: String,
+}
+
+impl TryFrom<SubscriptionFormData> for NewSubscriber {
+    type Error = String;
+
+    fn try_from(value: SubscriptionFormData) -> Result<Self, Self::Error> {
+        Ok(Self {
+            name: SubscriberName::parse(value.name)?,
+            email: SubscriberEmail::parse(value.email)?,
+        })
+    }
 }
 
 #[tracing::instrument(
@@ -24,17 +36,16 @@ pub struct SubscriptionFormData {
         subscriber_name = %form.name
     )
 )]
-#[debug_handler]
-pub async fn subscribe(
-    State(state): State<AppState>,
+pub async fn subscribe<E>(
+    State(state): State<AppState<E>>,
     Form(form): Form<SubscriptionFormData>,
-) -> Result<StatusCode, (StatusCode, String)> {
-    let new_subscriber = NewSubscriber {
-        email: SubscriberEmail::parse(form.email)
-            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?,
-        name: SubscriberName::parse(form.name)
-            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?,
-    };
+) -> Result<StatusCode, (StatusCode, String)>
+where
+    E: EmailClient + Clone,
+{
+    let new_subscriber: NewSubscriber = form
+        .try_into()
+        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
     insert_subscriber(&state.connection_pool, &new_subscriber)
         .await
         .map(|_| StatusCode::OK)

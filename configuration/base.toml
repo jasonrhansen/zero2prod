@@ -7,3 +7,9 @@ port = 5432
 username = "postgres"
 password = "password"
 database_name = "newsletter"
+
+[email_client]
+sender_email = "test@gmail.com"
+smtp_relay = "smtp.gmail.com"
+smtp_username = "test@gmail.com"
+smtp_password = "secret password"

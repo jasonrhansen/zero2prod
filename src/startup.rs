@@ -15,9 +15,13 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 use crate::app_state::AppState;
+use crate::email_client::EmailClient;
 use crate::routes;
 
-fn app(shared_state: AppState) -> Router {
+fn app<E>(shared_state: AppState<E>) -> Router
+where
+    E: EmailClient + Clone + Send + Sync + 'static,
+{
     let middleware_stack = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(handle_error))
         // Return an error after 30 seconds
@@ -51,10 +55,13 @@ fn app(shared_state: AppState) -> Router {
         .layer(middleware_stack)
 }
 
-pub fn run(
+pub fn run<E>(
     listener: TcpListener,
-    shared_state: AppState,
-) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, BoxError> {
+    shared_state: AppState<E>,
+) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, anyhow::Error>
+where
+    E: EmailClient + Clone + Send + Sync + 'static,
+{
     let server = axum::Server::from_tcp(listener)?.serve(app(shared_state).into_make_service());
 
     Ok(server)

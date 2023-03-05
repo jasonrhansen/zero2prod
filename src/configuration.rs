@@ -7,10 +7,13 @@ use sqlx::{
 };
 use tracing::log::LevelFilter;
 
+use crate::domain::SubscriberEmail;
+
 #[derive(Deserialize)]
 pub struct Settings {
     pub application: ApplicationSettings,
     pub database: DatabaseSettings,
+    pub email_client: EmailClientSettings,
 }
 
 #[derive(Deserialize)]
@@ -29,6 +32,20 @@ pub struct DatabaseSettings {
     pub host: String,
     pub database_name: String,
     pub require_ssl: bool,
+}
+
+#[derive(Deserialize)]
+pub struct EmailClientSettings {
+    pub smtp_relay: String,
+    pub smtp_username: String,
+    pub smtp_password: Secret<String>,
+    pub sender_email: String,
+}
+
+impl EmailClientSettings {
+    pub fn sender(&self) -> Result<SubscriberEmail, String> {
+        SubscriberEmail::parse(self.sender_email.clone())
+    }
 }
 
 impl DatabaseSettings {

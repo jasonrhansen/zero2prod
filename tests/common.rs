@@ -1,3 +1,4 @@
+use axum::async_trait;
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
@@ -5,6 +6,8 @@ use uuid::Uuid;
 use zero2prod::{
     app_state::AppState,
     configuration::{get_configuration, DatabaseSettings},
+    domain::SubscriberEmail,
+    email_client::EmailClient,
     startup::run,
     telemetry,
 };
@@ -29,6 +32,21 @@ pub struct TestApp {
     pub connection_pool: PgPool,
 }
 
+#[derive(Clone)]
+pub struct TestEmailClient {}
+
+#[async_trait]
+impl EmailClient for TestEmailClient {
+    async fn send_email(
+        &self,
+        _recipient: SubscriberEmail,
+        _subject: &str,
+        _html_content: &str,
+    ) -> Result<(), anyhow::Error> {
+        Ok(())
+    }
+}
+
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
@@ -42,6 +60,7 @@ pub async fn spawn_app() -> TestApp {
 
     let app_state = AppState {
         connection_pool: connection_pool.clone(),
+        email_client: TestEmailClient {},
     };
 
     let server = run(listener, app_state).expect("Failed to bind to address");
