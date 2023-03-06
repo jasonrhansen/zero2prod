@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use axum::async_trait;
+use hyper::StatusCode;
 use linkify::Link;
 use once_cell::sync::Lazy;
 use reqwest::Url;
@@ -9,7 +10,7 @@ use uuid::Uuid;
 use zero2prod::{
     configuration::{get_configuration, DatabaseSettings},
     domain::SubscriberEmail,
-    email_client::EmailClient,
+    email_client::{self, EmailClient},
     startup::Application,
     telemetry,
 };
@@ -73,7 +74,7 @@ impl EmailClient for TestEmailClient {
         recipient: SubscriberEmail,
         subject: &str,
         html_content: &str,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), email_client::SendEmailError> {
         self.inner.lock().unwrap().sends.push(TestEmail {
             recipient,
             subject: subject.to_owned(),
@@ -114,7 +115,7 @@ pub async fn spawn_app() -> TestApp {
     let application_port = application.port();
 
     let address = format!("http://127.0.0.1:{}", application.port());
-    let _ = tokio::spawn(application.run_until_stopped());
+    drop(tokio::spawn(application.run_until_stopped()));
 
     TestApp {
         address,
@@ -149,4 +150,12 @@ pub fn get_links(html_text: &str) -> Vec<Link> {
         .links(html_text)
         .filter(|l| *l.kind() == linkify::LinkKind::Url)
         .collect()
+}
+
+pub fn assert_status_code(expected: StatusCode, actual: StatusCode, payload: &str) {
+    assert_eq!(
+        expected, actual,
+        "The API did not return a {} when the payload was {}.",
+        expected, payload
+    );
 }

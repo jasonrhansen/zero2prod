@@ -1,4 +1,10 @@
-use axum::{extract::State, Form};
+use std::fmt::Display;
+
+use axum::{
+    extract::State,
+    response::{IntoResponse, Response},
+    Form,
+};
 use chrono::Utc;
 use hyper::StatusCode;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -7,10 +13,9 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    app_error::AppError,
     app_state::AppState,
     domain::{NewSubscriber, SubscriberEmail, SubscriberName},
-    email_client::EmailClient,
+    email_client::{self, EmailClient},
 };
 
 #[derive(Deserialize)]
@@ -30,6 +35,50 @@ impl TryFrom<SubscriptionFormData> for NewSubscriber {
     }
 }
 
+#[derive(Debug)]
+pub enum SubscribeError {
+    Validation(String),
+    Database(sqlx::Error),
+    SendEmail(email_client::SendEmailError),
+}
+
+impl IntoResponse for SubscribeError {
+    fn into_response(self) -> Response {
+        let status_code = match self {
+            SubscribeError::Validation(_) => StatusCode::BAD_REQUEST,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        status_code.into_response()
+    }
+}
+
+impl Display for SubscribeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Failed to create a new subscriber")
+    }
+}
+
+impl std::error::Error for SubscribeError {}
+
+impl From<email_client::SendEmailError> for SubscribeError {
+    fn from(e: email_client::SendEmailError) -> Self {
+        Self::SendEmail(e)
+    }
+}
+
+impl From<sqlx::Error> for SubscribeError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Database(e)
+    }
+}
+
+impl From<String> for SubscribeError {
+    fn from(e: String) -> Self {
+        Self::Validation(e)
+    }
+}
+
 #[tracing::instrument(
     name = "Adding a new subscriber",
     skip(state, form),
@@ -41,22 +90,15 @@ impl TryFrom<SubscriptionFormData> for NewSubscriber {
 pub async fn subscribe<E>(
     State(state): State<AppState<E>>,
     Form(form): Form<SubscriptionFormData>,
-) -> Result<StatusCode, AppError>
+) -> Result<StatusCode, SubscribeError>
 where
     E: EmailClient + Clone,
 {
-    let new_subscriber: NewSubscriber = match form.try_into() {
-        Ok(s) => s,
-        Err(_) => return Ok(StatusCode::UNPROCESSABLE_ENTITY),
-    };
-
+    let new_subscriber: NewSubscriber = form.try_into()?;
     let mut transaction = state.db_pool.begin().await?;
-
     let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber).await?;
-
     let subscription_token = generate_subscription_token();
     store_token(&mut transaction, subscriber_id, &subscription_token).await?;
-
     transaction.commit().await?;
 
     send_confirmation_email(
@@ -79,7 +121,7 @@ pub async fn send_confirmation_email<E>(
     new_subscriber: NewSubscriber,
     base_url: &str,
     confirmation_token: &str,
-) -> Result<(), anyhow::Error>
+) -> Result<(), email_client::SendEmailError>
 where
     E: EmailClient + Clone,
 {

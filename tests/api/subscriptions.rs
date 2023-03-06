@@ -1,7 +1,7 @@
 use hyper::StatusCode;
 use sqlx;
 
-use crate::helpers::spawn_app;
+use crate::helpers::{assert_status_code, spawn_app};
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
@@ -10,7 +10,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let body = "name=Le%20Guin&email=ursula_le_guin%40gmail.com";
     let response = test_app.post_subscriptions(body.into()).await;
 
-    assert_eq!(200, response.status().as_u16());
+    assert_eq!(StatusCode::OK, response.status());
 }
 
 #[tokio::test]
@@ -43,17 +43,16 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
     for (invalid_body, error_message) in test_cases {
         let response = test_app.post_subscriptions(invalid_body.into()).await;
 
-        assert_eq!(
+        assert_status_code(
             StatusCode::UNPROCESSABLE_ENTITY,
-            response.status().as_u16(),
-            "The API did not fail with 422 Unprocessable Entity when the payload was {}.",
-            error_message
+            response.status(),
+            error_message,
         );
     }
 }
 
 #[tokio::test]
-async fn subscribe_returns_a_422_when_fields_are_present_but_invalid() {
+async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
     let test_app = spawn_app().await;
 
     let test_cases = vec![
@@ -65,12 +64,7 @@ async fn subscribe_returns_a_422_when_fields_are_present_but_invalid() {
     for (body, description) in test_cases {
         let response = test_app.post_subscriptions(body.into()).await;
 
-        assert_eq!(
-            422,
-            response.status().as_u16(),
-            "The API did not return a 422 Unprocessable Entity when the payload was {}.",
-            description
-        );
+        assert_status_code(StatusCode::BAD_REQUEST, response.status(), description);
     }
 }
 

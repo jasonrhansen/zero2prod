@@ -1,9 +1,23 @@
+use std::error::Error;
+
 use axum::async_trait;
 use lettre::{
     message::header::ContentType, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 
 use crate::domain::SubscriberEmail;
+
+#[derive(Debug)]
+pub struct SendEmailError(Box<dyn Error>);
+
+impl<E> From<E> for SendEmailError
+where
+    E: Error + 'static,
+{
+    fn from(err: E) -> Self {
+        Self(Box::new(err))
+    }
+}
 
 #[async_trait]
 pub trait EmailClient {
@@ -12,7 +26,7 @@ pub trait EmailClient {
         recipient: SubscriberEmail,
         subject: &str,
         html_content: &str,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), SendEmailError>;
 }
 
 #[derive(Clone)]
@@ -34,7 +48,7 @@ impl EmailClient for SmtpEmailClient {
         recipient: SubscriberEmail,
         subject: &str,
         html_content: &str,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), SendEmailError> {
         let email = Message::builder()
             .from(self.sender.as_ref().parse().unwrap())
             .to(recipient.as_ref().parse().unwrap())
