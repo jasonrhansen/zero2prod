@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use axum::async_trait;
 use lettre::{
     error::Error as EmailError, message::header::ContentType, transport::smtp::Error as SmtpError,
@@ -8,37 +6,12 @@ use lettre::{
 
 use crate::domain::SubscriberEmail;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SendEmailError {
-    EmailError(EmailError),
-    SmtpError(SmtpError),
-}
-
-impl Display for SendEmailError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to send email")
-    }
-}
-
-impl std::error::Error for SendEmailError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            SendEmailError::EmailError(e) => Some(e),
-            SendEmailError::SmtpError(e) => Some(e),
-        }
-    }
-}
-
-impl From<EmailError> for SendEmailError {
-    fn from(value: EmailError) -> Self {
-        SendEmailError::EmailError(value)
-    }
-}
-
-impl From<SmtpError> for SendEmailError {
-    fn from(value: SmtpError) -> Self {
-        SendEmailError::SmtpError(value)
-    }
+    #[error(transparent)]
+    EmailError(#[from] EmailError),
+    #[error(transparent)]
+    SmtpError(#[from] SmtpError),
 }
 
 #[async_trait]

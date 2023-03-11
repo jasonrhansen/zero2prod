@@ -2655,6 +2655,7 @@ dependencies = [
  "serde",
  "serde-aux",
  "sqlx",
+ "thiserror",
  "tokio",
  "tower",
  "tower-http 0.4.0",

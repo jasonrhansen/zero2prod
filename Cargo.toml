@@ -31,6 +31,7 @@ validator = "0.16"
 lettre = { version = "0.10", default-features=false, features = ["smtp-transport", "pool", "hostname", "builder", "tokio1-rustls-tls"] }
 anyhow = "1.0"
 rand = { version = "0.8", features = ["std_rng"] }
+thiserror = "1"
 
 [dependencies.sqlx]
 version = "0.6"
