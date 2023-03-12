@@ -1,5 +1,6 @@
 pub mod app_error;
 pub mod app_state;
+pub mod authentication;
 pub mod configuration;
 pub mod domain;
 pub mod email_client;

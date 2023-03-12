@@ -93,6 +93,8 @@ where
         .layer(CompressionLayer::new());
 
     let with_state = Router::new()
+        .route("/", get(routes::home))
+        .route("/login", get(routes::login_form).post(routes::login))
         .route("/subscriptions", post(routes::subscribe))
         .route("/subscriptions/confirm", get(routes::confirm))
         .route("/newsletters", post(routes::publish_newsletter))

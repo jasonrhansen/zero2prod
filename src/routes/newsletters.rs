@@ -1,11 +1,21 @@
 use anyhow::Context;
-use axum::{extract::State, response::IntoResponse, Json};
+use axum::{
+    extract::State,
+    headers::{authorization::Basic, Authorization},
+    response::IntoResponse,
+    Json, TypedHeader,
+};
 use hyper::StatusCode;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tracing::warn;
 
-use crate::{app_state::AppState, domain::SubscriberEmail, email_client::EmailClient};
+use crate::{
+    app_state::AppState,
+    authentication::{validate_credentials, AuthError, Credentials},
+    domain::SubscriberEmail,
+    email_client::EmailClient,
+};
 
 #[derive(Deserialize)]
 pub struct BodyData {
@@ -15,6 +25,8 @@ pub struct BodyData {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PublishError {
+    #[error("Authentication failed")]
+    Auth(#[source] anyhow::Error),
     #[error("{0}")]
     Validation(String),
     #[error(transparent)]
@@ -24,21 +36,33 @@ pub enum PublishError {
 impl IntoResponse for PublishError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match self {
+            Self::Auth(_) => StatusCode::UNAUTHORIZED,
             Self::Validation(_) => StatusCode::BAD_REQUEST,
             Self::Unexpected(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        status_code.into_response()
+        (status_code, self.to_string()).into_response()
     }
 }
 
 pub async fn publish_newsletter<E>(
+    TypedHeader(authorization): TypedHeader<Authorization<Basic>>,
     State(state): State<AppState<E>>,
     body: Json<BodyData>,
 ) -> Result<StatusCode, PublishError>
 where
     E: EmailClient + Clone,
 {
+    let credentials: Credentials = authorization.into();
+
+    let user_id = validate_credentials(credentials, &state.db_pool)
+        .await
+        .map_err(|e| match e {
+            AuthError::InvalidCredentials(_) => PublishError::Auth(e.into()),
+            AuthError::Unexpected(_) => PublishError::Unexpected(e.into()),
+        })?;
+    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+
     let subscribers = get_confirmed_subscribers(&state.db_pool).await?;
     for subscriber in subscribers {
         state
