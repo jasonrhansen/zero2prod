@@ -51,7 +51,8 @@ impl TestApp {
     pub fn confirmation_link(&self) -> Url {
         let email_server = self.email_server.lock().unwrap();
         let mut confirmation_link =
-            Url::parse(get_links(&email_server.sends[0].html_content)[0].as_str()).unwrap();
+            Url::parse(get_links(&email_server.sends.last().unwrap().html_content)[0].as_str())
+                .unwrap();
 
         assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
 
@@ -59,6 +60,15 @@ impl TestApp {
         confirmation_link.set_port(Some(self.port)).unwrap();
 
         confirmation_link
+    }
+
+    pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/newsletters", &self.address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request")
     }
 }
 
@@ -71,12 +81,12 @@ pub struct TestEmailClient {
 impl EmailClient for TestEmailClient {
     async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
     ) -> Result<(), email_client::SendEmailError> {
         self.inner.lock().unwrap().sends.push(TestEmail {
-            recipient,
+            recipient: recipient.clone(),
             subject: subject.to_owned(),
             html_content: html_content.to_owned(),
         });

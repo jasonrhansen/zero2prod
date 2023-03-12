@@ -95,6 +95,7 @@ where
     let with_state = Router::new()
         .route("/subscriptions", post(routes::subscribe))
         .route("/subscriptions/confirm", get(routes::confirm))
+        .route("/newsletters", post(routes::publish_newsletter))
         .with_state(shared_state);
 
     Router::new()

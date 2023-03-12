@@ -1,5 +1,4 @@
 use hyper::StatusCode;
-use sqlx;
 
 use crate::helpers::{assert_status_code, spawn_app};
 

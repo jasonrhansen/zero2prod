@@ -122,7 +122,7 @@ where
 
     email_client
         .send_email(
-            new_subscriber.email,
+            &new_subscriber.email,
             "Welcome!",
             &format!(
                 r#"

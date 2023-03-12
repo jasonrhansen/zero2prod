@@ -18,7 +18,7 @@ pub enum SendEmailError {
 pub trait EmailClient {
     async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
     ) -> Result<(), SendEmailError>;
@@ -40,7 +40,7 @@ impl SmtpEmailClient {
 impl EmailClient for SmtpEmailClient {
     async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
     ) -> Result<(), SendEmailError> {
