@@ -9,7 +9,7 @@ use crate::telemetry::spawn_blocking_with_tracing;
 
 #[derive(thiserror::Error, Debug)]
 pub enum AuthError {
-    #[error("Invalid credentials.")]
+    #[error("Invalid credentials")]
     InvalidCredentials(#[source] anyhow::Error),
     #[error(transparent)]
     Unexpected(#[from] anyhow::Error),

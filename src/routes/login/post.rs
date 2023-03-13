@@ -3,6 +3,7 @@ use axum::{
     response::{IntoResponse, Redirect},
     Form,
 };
+use axum_flash::Flash;
 use hyper::StatusCode;
 use secrecy::Secret;
 use serde::Deserialize;
@@ -49,22 +50,28 @@ impl IntoResponse for LoginError {
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
 )]
 pub async fn login<E>(
+    flash: Flash,
     State(state): State<AppState<E>>,
     Form(form): Form<FormData>,
-) -> Result<Redirect, LoginError>
+) -> (Flash, Redirect)
 where
     E: EmailClient + Clone + 'static,
 {
     let credentials: Credentials = form.into();
 
     tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
-    let user_id = validate_credentials(credentials, &state.db_pool)
-        .await
-        .map_err(|e| match e {
-            AuthError::InvalidCredentials(_) => LoginError::Auth(e.into()),
-            AuthError::Unexpected(_) => LoginError::Unexpected(e.into()),
-        })?;
-    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+    match validate_credentials(credentials, &state.db_pool).await {
+        Ok(user_id) => {
+            tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+            (flash, Redirect::to("/"))
+        }
+        Err(e) => {
+            let error = match e {
+                AuthError::InvalidCredentials(_) => LoginError::Auth(e.into()),
+                AuthError::Unexpected(_) => LoginError::Unexpected(e.into()),
+            };
 
-    Ok(Redirect::to("/"))
+            (flash.error(error.to_string()), Redirect::to("/login"))
+        }
+    }
 }

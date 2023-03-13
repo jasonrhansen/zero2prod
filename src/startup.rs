@@ -2,6 +2,7 @@ use axum::error_handling::HandleErrorLayer;
 use axum::routing::{post, IntoMakeService};
 use axum::{routing::get, Router};
 use axum::{BoxError, Server};
+use axum_flash::Key;
 use hyper::server::conn::AddrIncoming;
 use hyper::{Method, StatusCode, Uri};
 use sqlx::postgres::PgPoolOptions;
@@ -41,6 +42,7 @@ impl Application {
                 db_pool,
                 email_client,
                 base_url: config.application.base_url,
+                flash_config: axum_flash::Config::new(Key::generate()),
             },
         )?;
 
