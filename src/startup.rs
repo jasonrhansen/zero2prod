@@ -3,6 +3,8 @@ use axum::routing::{post, IntoMakeService};
 use axum::{routing::get, Router};
 use axum::{BoxError, Server};
 use axum_flash::Key;
+use axum_sessions::async_session::SessionStore;
+use axum_sessions::SessionLayer;
 use hyper::server::conn::AddrIncoming;
 use hyper::{Method, StatusCode, Uri};
 use sqlx::postgres::PgPoolOptions;
@@ -28,10 +30,18 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn build<E>(config: Settings, email_client: E) -> Result<Self, anyhow::Error>
+    pub async fn build<E, S>(
+        config: Settings,
+        email_client: E,
+        session_store: S,
+    ) -> Result<Self, anyhow::Error>
     where
         E: EmailClient + Clone + Send + Sync + 'static,
+        S: SessionStore,
     {
+        // TODO: get secret key from environment
+        let secret_key = Key::generate();
+
         let db_pool = get_connection_pool(&config.database);
         let address = format!("{}:{}", config.application.host, config.application.port);
         let listener = TcpListener::bind(address)?;
@@ -42,8 +52,10 @@ impl Application {
                 db_pool,
                 email_client,
                 base_url: config.application.base_url,
-                flash_config: axum_flash::Config::new(Key::generate()),
+                flash_config: axum_flash::Config::new(secret_key.clone()),
             },
+            session_store,
+            secret_key,
         )?;
 
         Ok(Self { port, server })
@@ -66,10 +78,13 @@ pub fn get_connection_pool(config: &DatabaseSettings) -> PgPool {
         .connect_lazy_with(config.with_db())
 }
 
-fn app<E>(shared_state: AppState<E>) -> Router
+fn app<E, S>(shared_state: AppState<E>, session_store: S, secret_key: Key) -> Router
 where
     E: EmailClient + Clone + Send + Sync + 'static,
+    S: SessionStore,
 {
+    let session_layer = SessionLayer::new(session_store, secret_key.master());
+
     let middleware_stack = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(handle_error))
         // Return an error after 30 seconds
@@ -78,7 +93,8 @@ where
         .load_shed()
         // Process at most 100 requests concurrently
         .concurrency_limit(100)
-        // Set request id before the tra layer so it ends up in the logs.
+        .layer(session_layer)
+        // Set request id before the tracing layer so it ends up in the logs.
         .set_x_request_id(MakeRequestUuid)
         // Tracing
         .layer(
@@ -108,14 +124,18 @@ where
         .layer(middleware_stack)
 }
 
-pub fn run<E>(
+pub fn run<E, S>(
     listener: TcpListener,
     shared_state: AppState<E>,
+    session_store: S,
+    secret_key: Key,
 ) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, anyhow::Error>
 where
     E: EmailClient + Clone + Send + Sync + 'static,
+    S: SessionStore,
 {
-    let server = axum::Server::from_tcp(listener)?.serve(app(shared_state).into_make_service());
+    let server = axum::Server::from_tcp(listener)?
+        .serve(app(shared_state, session_store, secret_key).into_make_service());
 
     Ok(server)
 }

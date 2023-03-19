@@ -1,5 +1,8 @@
+use async_fred_session::RedisSessionStore;
+use fred::{pool::RedisPool, prelude::*};
 use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
 use secrecy::ExposeSecret;
+
 use zero2prod::{
     configuration::{get_configuration, Settings},
     domain::SubscriberEmail,
@@ -15,8 +18,11 @@ async fn main() {
 
     let config = get_configuration().expect("Failed to read configuration");
     let email_client = setup_email_client(&config);
+    let session_store = setup_redis_session_store(&config).await;
 
-    let application = Application::build(config, email_client).await.unwrap();
+    let application = Application::build(config, email_client, session_store)
+        .await
+        .unwrap();
     application.run_until_stopped().await.unwrap();
 }
 
@@ -33,4 +39,13 @@ fn setup_email_client(config: &Settings) -> SmtpEmailClient {
         .expect("Invalid sender email address");
 
     SmtpEmailClient::new(mailer, sender)
+}
+
+async fn setup_redis_session_store(config: &Settings) -> RedisSessionStore {
+    let redis_config = RedisConfig::from_url(config.redis_uri.expose_secret().as_ref()).unwrap();
+    let redis_pool = RedisPool::new(redis_config, 1).unwrap();
+    redis_pool.connect(None);
+    redis_pool.wait_for_connect().await.unwrap();
+
+    RedisSessionStore::from_pool(redis_pool, Some("async-fred-session/".into()))
 }

@@ -1,14 +1,17 @@
 use std::sync::{Arc, Mutex};
 
+use async_fred_session::RedisSessionStore;
 use axum::async_trait;
+use fred::{pool::RedisPool, prelude::*};
 use hyper::StatusCode;
 use linkify::Link;
 use once_cell::sync::Lazy;
 use reqwest::Url;
+use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use zero2prod::{
-    configuration::{get_configuration, DatabaseSettings},
+    configuration::{get_configuration, DatabaseSettings, Settings},
     domain::SubscriberEmail,
     email_client::{self, EmailClient},
     startup::Application,
@@ -142,8 +145,9 @@ pub async fn spawn_app() -> TestApp {
 
     let email_client = TestEmailClient::default();
     let email_client_inner = Arc::clone(&email_client.inner);
+    let session_store = setup_redis_session_store(&config).await;
 
-    let application = Application::build(config.clone(), email_client)
+    let application = Application::build(config.clone(), email_client, session_store)
         .await
         .expect("Failed to build application");
     let application_port = application.port();
@@ -164,6 +168,15 @@ pub async fn spawn_app() -> TestApp {
         email_server: email_client_inner,
         api_client,
     }
+}
+
+async fn setup_redis_session_store(config: &Settings) -> RedisSessionStore {
+    let redis_config = RedisConfig::from_url(config.redis_uri.expose_secret().as_ref()).unwrap();
+    let redis_pool = RedisPool::new(redis_config, 1).unwrap();
+    redis_pool.connect(None);
+    redis_pool.wait_for_connect().await.unwrap();
+
+    RedisSessionStore::from_pool(redis_pool, Some("async-fred-session/".into()))
 }
 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
