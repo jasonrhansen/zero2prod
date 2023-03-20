@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use async_fred_session::RedisSessionStore;
 use axum::async_trait;
 use fred::{pool::RedisPool, prelude::*};
@@ -39,6 +40,7 @@ pub struct TestApp {
     pub db_pool: PgPool,
     pub email_server: Arc<Mutex<TestEmailServer>>,
     pub api_client: reqwest::Client,
+    pub test_user: TestUser,
 }
 
 impl TestApp {
@@ -97,6 +99,17 @@ impl TestApp {
             .await
             .unwrap()
     }
+
+    pub async fn get_admin_dashboard(&self) -> String {
+        self.api_client
+            .get(&format!("{}/admin/dashboard", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+            .text()
+            .await
+            .unwrap()
+    }
 }
 
 #[derive(Clone, Default)]
@@ -134,6 +147,39 @@ pub struct TestEmailServer {
     pub sends: Vec<TestEmail>,
 }
 
+pub struct TestUser {
+    pub id: Uuid,
+    pub username: String,
+    pub password: String,
+}
+
+impl TestUser {
+    pub fn generate() -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            username: Uuid::new_v4().to_string(),
+            password: Uuid::new_v4().to_string(),
+        }
+    }
+
+    async fn store(&self, pool: &PgPool) {
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let password_hash = Argon2::default()
+            .hash_password(self.password.as_bytes(), &salt)
+            .unwrap()
+            .to_string();
+        sqlx::query!(
+            "INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3)",
+            self.id,
+            self.username,
+            password_hash,
+        )
+        .execute(pool)
+        .await
+        .expect("Failed to store test user");
+    }
+}
+
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
@@ -161,12 +207,16 @@ pub async fn spawn_app() -> TestApp {
         .build()
         .unwrap();
 
+    let test_user = TestUser::generate();
+    test_user.store(&connection_pool).await;
+
     TestApp {
         address,
         port: application_port,
         db_pool: connection_pool,
         email_server: email_client_inner,
         api_client,
+        test_user,
     }
 }
 

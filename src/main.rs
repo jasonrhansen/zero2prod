@@ -1,8 +1,8 @@
 use async_fred_session::RedisSessionStore;
 use fred::{pool::RedisPool, prelude::*};
 use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
-use secrecy::ExposeSecret;
 
+use secrecy::ExposeSecret;
 use zero2prod::{
     configuration::{get_configuration, Settings},
     domain::SubscriberEmail,

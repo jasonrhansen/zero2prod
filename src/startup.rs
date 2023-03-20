@@ -116,6 +116,7 @@ where
         .route("/subscriptions", post(routes::subscribe))
         .route("/subscriptions/confirm", get(routes::confirm))
         .route("/newsletters", post(routes::publish_newsletter))
+        .route("/admin/dashboard", get(routes::admin_dashboard))
         .with_state(shared_state);
 
     Router::new()
