@@ -1,11 +1,9 @@
-use anyhow::Context;
 use axum::{
     extract::State,
     response::{IntoResponse, Redirect},
     Form,
 };
 use axum_flash::Flash;
-use axum_sessions::extractors::WritableSession;
 use hyper::StatusCode;
 use secrecy::Secret;
 use serde::Deserialize;
@@ -15,6 +13,7 @@ use crate::{
     app_state::AppState,
     authentication::{validate_credentials, AuthError, Credentials},
     email_client::EmailClient,
+    session_state::TypedSession,
 };
 
 #[derive(Deserialize)]
@@ -64,7 +63,7 @@ impl From<AuthError> for LoginError {
 pub async fn login<E>(
     flash: Flash,
     State(state): State<AppState<E>>,
-    session: WritableSession,
+    session: TypedSession,
     Form(form): Form<FormData>,
 ) -> (Flash, Redirect)
 where
@@ -80,12 +79,11 @@ where
 async fn try_login(
     credentials: Credentials,
     db_pool: &PgPool,
-    mut session: WritableSession,
+    mut session: TypedSession,
 ) -> Result<(), LoginError> {
     tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
 
     let user_id = validate_credentials(credentials, db_pool).await?;
-    Ok(session
-        .insert("user_id", user_id)
-        .context("Unable to save user_id to session")?)
+    session.regenerate();
+    Ok(session.insert_user_id(user_id)?)
 }

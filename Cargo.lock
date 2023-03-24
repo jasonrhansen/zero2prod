@@ -3388,6 +3388,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "async-fred-session",
+ "async-session",
  "axum",
  "axum-flash",
  "axum-sessions",

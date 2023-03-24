@@ -1,21 +1,11 @@
 use anyhow::Context;
-use axum::{
-    extract::State,
-    headers::{authorization::Basic, Authorization},
-    response::IntoResponse,
-    Json, TypedHeader,
-};
+use axum::{extract::State, response::IntoResponse, Json};
 use hyper::StatusCode;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tracing::warn;
 
-use crate::{
-    app_state::AppState,
-    authentication::{validate_credentials, AuthError, Credentials},
-    domain::SubscriberEmail,
-    email_client::EmailClient,
-};
+use crate::{app_state::AppState, domain::SubscriberEmail, email_client::EmailClient};
 
 #[derive(Deserialize)]
 pub struct BodyData {
@@ -46,23 +36,12 @@ impl IntoResponse for PublishError {
 }
 
 pub async fn publish_newsletter<E>(
-    TypedHeader(authorization): TypedHeader<Authorization<Basic>>,
     State(state): State<AppState<E>>,
     body: Json<BodyData>,
 ) -> Result<StatusCode, PublishError>
 where
     E: EmailClient + Clone,
 {
-    let credentials: Credentials = authorization.into();
-
-    let user_id = validate_credentials(credentials, &state.db_pool)
-        .await
-        .map_err(|e| match e {
-            AuthError::InvalidCredentials(_) => PublishError::Auth(e.into()),
-            AuthError::Unexpected(_) => PublishError::Unexpected(e.into()),
-        })?;
-    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-
     let subscribers = get_confirmed_subscribers(&state.db_pool).await?;
     for subscriber in subscribers {
         state

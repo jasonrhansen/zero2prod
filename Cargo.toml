@@ -38,6 +38,7 @@ thiserror = "1"
 argon2 = { version = "0.5", features = ["std"] }
 async-fred-session = "0.1"
 fred = "5.2"
+async-session = "3.0"
 
 [dependencies.sqlx]
 version = "0.6"
