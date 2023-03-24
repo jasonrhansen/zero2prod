@@ -1,7 +1,7 @@
 use anyhow::Context;
 use axum::{
     extract::State,
-    response::{IntoResponse, Redirect, Response},
+    response::{Html, IntoResponse, Redirect, Response},
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -20,7 +20,7 @@ where
 {
     let response = if let Some(user_id) = session.get_user_id() {
         let username = get_username(user_id, &state.db_pool).await?;
-        format!(
+        Html(format!(
             r#"<!DOCTYPE html>
             <html lang="en">
                 <head>
@@ -31,7 +31,7 @@ where
                     <p>Welcome {username}!</p>
                 </body>
             </html>"#
-        )
+        ))
         .into_response()
     } else {
         Redirect::to("/login").into_response()
