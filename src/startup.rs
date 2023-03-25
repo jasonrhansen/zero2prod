@@ -1,4 +1,5 @@
 use axum::error_handling::HandleErrorLayer;
+use axum::middleware::from_fn;
 use axum::routing::{post, IntoMakeService};
 use axum::{routing::get, Router};
 use axum::{BoxError, Server};
@@ -20,6 +21,7 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 use crate::app_state::AppState;
+use crate::authentication::reject_anonymous_users;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
 use crate::routes;
@@ -110,18 +112,22 @@ where
         // Compress response bodies
         .layer(CompressionLayer::new());
 
+    let admin_routes = Router::new()
+        .route("/dashboard", get(routes::admin_dashboard))
+        .route(
+            "/password",
+            get(routes::change_password_form).post(routes::change_password),
+        )
+        .route("/logout", post(routes::log_out))
+        .layer(from_fn(reject_anonymous_users));
+
     let with_state = Router::new()
         .route("/", get(routes::home))
         .route("/login", get(routes::login_form).post(routes::login))
         .route("/subscriptions", post(routes::subscribe))
         .route("/subscriptions/confirm", get(routes::confirm))
         .route("/newsletters", post(routes::publish_newsletter))
-        .route("/admin/dashboard", get(routes::admin_dashboard))
-        .route(
-            "/admin/password",
-            get(routes::change_password_form).post(routes::change_password),
-        )
-        .route("/admin/logout", post(routes::log_out))
+        .nest("/admin", admin_routes)
         .with_state(shared_state);
 
     Router::new()

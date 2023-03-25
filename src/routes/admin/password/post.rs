@@ -1,7 +1,8 @@
-use axum::{extract::State, response::Redirect, Form};
+use axum::{extract::State, response::Redirect, Extension, Form};
 use axum_flash::Flash;
 use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::{
     app_error::AppError,
@@ -9,7 +10,6 @@ use crate::{
     authentication::{self, validate_credentials, AuthError, Credentials},
     email_client::EmailClient,
     routes::get_username,
-    session_state::TypedSession,
 };
 
 #[derive(Deserialize)]
@@ -21,18 +21,13 @@ pub struct FormData {
 
 pub async fn change_password<E>(
     flash: Flash,
+    Extension(user_id): Extension<Uuid>,
     State(state): State<AppState<E>>,
-    session: TypedSession,
     Form(form): Form<FormData>,
 ) -> Result<(Flash, Redirect), AppError>
 where
     E: EmailClient + Clone + 'static,
 {
-    let user_id = match session.get_user_id() {
-        Some(user_id) => user_id,
-        None => return Ok((flash, Redirect::to("/login"))),
-    };
-
     if form.new_password.expose_secret() != form.new_password_check.expose_secret() {
         let flash_message =
             "You entered two different new passwords - the field values must match.";
