@@ -1,20 +1,17 @@
 use askama::Template;
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::Html;
 use axum_flash::IncomingFlashes;
 
 #[derive(Template)]
 #[template(path = "change_password.html")]
 struct ChangePasswordTemplate {
-    flashes: Vec<String>,
+    flashes: IncomingFlashes,
 }
 
-pub async fn change_password_form(flashes: IncomingFlashes) -> Response {
+pub async fn change_password_form(flashes: IncomingFlashes) -> (IncomingFlashes, Html<String>) {
     let template = ChangePasswordTemplate {
-        flashes: flashes
-            .into_iter()
-            .map(|(_level, msg)| msg.to_string())
-            .collect(),
+        flashes: flashes.clone(),
     };
 
-    Html(template.render().unwrap()).into_response()
+    (flashes, Html(template.render().unwrap()))
 }
