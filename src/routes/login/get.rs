@@ -3,7 +3,7 @@ use axum::response::Html;
 use axum_flash::IncomingFlashes;
 
 #[derive(Template)]
-#[template(path = "change_password.html")]
+#[template(path = "login.html")]
 struct LoginTemplate {
     flashes: IncomingFlashes,
 }
