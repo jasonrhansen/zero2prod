@@ -117,6 +117,11 @@ where
         .route("/subscriptions/confirm", get(routes::confirm))
         .route("/newsletters", post(routes::publish_newsletter))
         .route("/admin/dashboard", get(routes::admin_dashboard))
+        .route(
+            "/admin/password",
+            get(routes::change_password_form).post(routes::change_password),
+        )
+        .route("/admin/logout", post(routes::log_out))
         .with_state(shared_state);
 
     Router::new()

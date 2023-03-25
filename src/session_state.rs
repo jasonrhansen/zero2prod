@@ -26,6 +26,10 @@ impl TypedSession {
     pub fn get_user_id(&self) -> Option<Uuid> {
         self.session.get::<Uuid>(Self::USER_ID_KEY)
     }
+
+    pub fn log_out(&mut self) {
+        self.session.destroy();
+    }
 }
 
 #[async_trait]

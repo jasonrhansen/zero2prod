@@ -7,8 +7,9 @@ use fred::{pool::RedisPool, prelude::*};
 use hyper::StatusCode;
 use linkify::Link;
 use once_cell::sync::Lazy;
-use reqwest::Url;
+use reqwest::{IntoUrl, Url};
 use secrecy::ExposeSecret;
+use serde::Serialize;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use zero2prod::{
@@ -44,6 +45,43 @@ pub struct TestApp {
 }
 
 impl TestApp {
+    pub async fn get<U>(&self, url: U) -> reqwest::Response
+    where
+        U: IntoUrl,
+    {
+        self.api_client
+            .get(url)
+            .send()
+            .await
+            .expect("Failed to execute request")
+    }
+
+    pub async fn post_form<U, B>(&self, url: U, body: &B) -> reqwest::Response
+    where
+        U: IntoUrl,
+        B: Serialize,
+    {
+        self.api_client
+            .post(url)
+            .form(&body)
+            .send()
+            .await
+            .expect("Failed to execute request")
+    }
+
+    pub async fn post_json<U, B>(&self, url: U, body: &B) -> reqwest::Response
+    where
+        U: IntoUrl,
+        B: Serialize,
+    {
+        self.api_client
+            .post(url)
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request")
+    }
+
     pub async fn post_subscriptions(&self, body: String) -> reqwest::Response {
         self.api_client
             .post(&format!("{}/subscriptions", &self.address))
@@ -69,47 +107,57 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
-        self.api_client
-            .post(&format!("{}/newsletters", &self.address))
-            .json(&body)
-            .send()
+        self.post_json(&format!("{}/newsletters", &self.address), &body)
             .await
-            .expect("Failed to execute request")
+    }
+
+    pub async fn get_login(&self) -> reqwest::Response {
+        self.get(&format!("{}/login", &self.address)).await
+    }
+
+    pub async fn get_login_html(&self) -> String {
+        self.get_login().await.text().await.unwrap()
     }
 
     pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
     where
-        Body: serde::Serialize,
+        Body: Serialize,
     {
-        self.api_client
-            .post(&format!("{}/login", &self.address))
-            .form(body)
-            .send()
+        self.post_form(&format!("{}/login", &self.address), &body)
             .await
-            .expect("Failed to execute request")
-    }
-
-    pub async fn get_login_html(&self) -> String {
-        self.api_client
-            .get(&format!("{}/login", &self.address))
-            .send()
-            .await
-            .expect("Failed to execute request")
-            .text()
-            .await
-            .unwrap()
     }
 
     pub async fn get_admin_dashboard(&self) -> reqwest::Response {
-        self.api_client
-            .get(&format!("{}/admin/dashboard", &self.address))
-            .send()
+        self.get(&format!("{}/admin/dashboard", &self.address))
             .await
-            .expect("Failed to execute request.")
     }
 
     pub async fn get_admin_dashboard_html(&self) -> String {
         self.get_admin_dashboard().await.text().await.unwrap()
+    }
+
+    pub async fn get_change_password(&self) -> reqwest::Response {
+        self.get(&format!("{}/admin/password", &self.address)).await
+    }
+
+    pub async fn get_change_password_html(&self) -> String {
+        self.get_change_password().await.text().await.unwrap()
+    }
+
+    pub async fn post_change_password<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: Serialize,
+    {
+        self.post_form(&format!("{}/admin/password", &self.address), body)
+            .await
+    }
+
+    pub async fn post_logout(&self) -> reqwest::Response {
+        self.api_client
+            .post(format!("{}/admin/logout", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request")
     }
 }
 
