@@ -12,7 +12,6 @@ use sqlx::PgPool;
 use crate::{
     app_state::AppState,
     authentication::{validate_credentials, AuthError, Credentials},
-    email_client::EmailClient,
     session_state::TypedSession,
 };
 
@@ -60,15 +59,12 @@ impl From<AuthError> for LoginError {
     skip(form, state),
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
 )]
-pub async fn login<E>(
+pub async fn login(
     flash: Flash,
-    State(state): State<AppState<E>>,
+    State(state): State<AppState>,
     session: TypedSession,
     Form(form): Form<FormData>,
-) -> (Flash, Redirect)
-where
-    E: EmailClient + Clone + 'static,
-{
+) -> (Flash, Redirect) {
     let credentials: Credentials = form.into();
     match try_login(credentials, &state.db_pool, session).await {
         Ok(()) => (flash, Redirect::to("/admin/dashboard")),

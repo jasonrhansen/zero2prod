@@ -7,7 +7,6 @@ use crate::{
     app_error::AppError,
     app_state::AppState,
     authentication::{self, validate_credentials, AuthError, Credentials, UserId},
-    email_client::EmailClient,
     routes::get_username,
 };
 
@@ -18,15 +17,12 @@ pub struct FormData {
     new_password_check: Secret<String>,
 }
 
-pub async fn change_password<E>(
+pub async fn change_password(
     flash: Flash,
     Extension(user_id): Extension<UserId>,
-    State(state): State<AppState<E>>,
+    State(state): State<AppState>,
     Form(form): Form<FormData>,
-) -> Result<(Flash, Redirect), AppError>
-where
-    E: EmailClient + Clone + 'static,
-{
+) -> Result<(Flash, Redirect), AppError> {
     if form.new_password.expose_secret() != form.new_password_check.expose_secret() {
         let flash_message =
             "You entered two different new passwords - the field values must match.";

@@ -1,24 +1,12 @@
 use axum::extract::FromRef;
 use sqlx::PgPool;
 
-use crate::email_client::EmailClient;
+use crate::email_client::DynEmailClient;
 
-#[derive(Clone)]
-pub struct AppState<E>
-where
-    E: EmailClient + Clone,
-{
+#[derive(Clone, FromRef)]
+pub struct AppState {
     pub db_pool: PgPool,
-    pub email_client: E,
+    pub email_client: DynEmailClient,
     pub base_url: String,
     pub flash_config: axum_flash::Config,
-}
-
-impl<E> FromRef<AppState<E>> for axum_flash::Config
-where
-    E: EmailClient + Clone + 'static,
-{
-    fn from_ref(state: &AppState<E>) -> Self {
-        state.flash_config.clone()
-    }
 }

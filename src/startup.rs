@@ -23,7 +23,7 @@ use std::time::Duration;
 use crate::app_state::AppState;
 use crate::authentication::reject_anonymous_users;
 use crate::configuration::{DatabaseSettings, Settings};
-use crate::email_client::EmailClient;
+use crate::email_client::DynEmailClient;
 use crate::routes;
 
 pub struct Application {
@@ -32,13 +32,12 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn build<E, S>(
+    pub async fn build<S>(
         config: Settings,
-        email_client: E,
+        email_client: DynEmailClient,
         session_store: S,
     ) -> Result<Self, anyhow::Error>
     where
-        E: EmailClient + Clone + Send + Sync + 'static,
         S: SessionStore,
     {
         // TODO: get secret key from environment
@@ -80,9 +79,8 @@ pub fn get_connection_pool(config: &DatabaseSettings) -> PgPool {
         .connect_lazy_with(config.with_db())
 }
 
-fn app<E, S>(shared_state: AppState<E>, session_store: S, secret_key: Key) -> Router
+fn app<S>(shared_state: AppState, session_store: S, secret_key: Key) -> Router
 where
-    E: EmailClient + Clone + Send + Sync + 'static,
     S: SessionStore,
 {
     let session_layer = SessionLayer::new(session_store, secret_key.master());
@@ -136,14 +134,13 @@ where
         .layer(middleware_stack)
 }
 
-pub fn run<E, S>(
+pub fn run<S>(
     listener: TcpListener,
-    shared_state: AppState<E>,
+    shared_state: AppState,
     session_store: S,
     secret_key: Key,
 ) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, anyhow::Error>
 where
-    E: EmailClient + Clone + Send + Sync + 'static,
     S: SessionStore,
 {
     let server = axum::Server::from_tcp(listener)?

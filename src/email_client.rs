@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::async_trait;
 use lettre::{
     error::Error as EmailError, message::header::ContentType, transport::smtp::Error as SmtpError,
@@ -23,6 +25,8 @@ pub trait EmailClient {
         html_content: &str,
     ) -> Result<(), SendEmailError>;
 }
+
+pub type DynEmailClient = Arc<dyn EmailClient + Send + Sync>;
 
 #[derive(Clone)]
 pub struct SmtpEmailClient {

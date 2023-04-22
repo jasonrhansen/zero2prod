@@ -238,7 +238,7 @@ pub async fn spawn_app() -> TestApp {
     config.database.database_name = Uuid::new_v4().to_string();
     let connection_pool = configure_database(&config.database).await;
 
-    let email_client = TestEmailClient::default();
+    let email_client = Arc::new(TestEmailClient::default());
     let email_client_inner = Arc::clone(&email_client.inner);
     let session_store = setup_redis_session_store(&config).await;
 

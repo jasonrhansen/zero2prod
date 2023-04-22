@@ -4,7 +4,7 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{app_error::AppError, app_state::AppState, email_client::EmailClient};
+use crate::{app_error::AppError, app_state::AppState};
 
 #[derive(Deserialize)]
 pub struct SubscriptionsConfirmParams {
@@ -12,13 +12,10 @@ pub struct SubscriptionsConfirmParams {
 }
 
 #[tracing::instrument(name = "Confirm a pending subscriber", skip(state, params))]
-pub async fn confirm<E>(
-    State(state): State<AppState<E>>,
+pub async fn confirm(
+    State(state): State<AppState>,
     Query(params): Query<SubscriptionsConfirmParams>,
-) -> Result<StatusCode, AppError>
-where
-    E: EmailClient + Clone,
-{
+) -> Result<StatusCode, AppError> {
     let subscriber_id =
         get_subscriber_id_from_token(&state.db_pool, &params.subscription_token).await?;
 

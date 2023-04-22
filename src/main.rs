@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_fred_session::RedisSessionStore;
 use fred::{pool::RedisPool, prelude::*};
 use lettre::{transport::smtp::authentication::Credentials, AsyncSmtpTransport, Tokio1Executor};
@@ -20,7 +22,7 @@ async fn main() {
     let email_client = setup_email_client(&config);
     let session_store = setup_redis_session_store(&config).await;
 
-    let application = Application::build(config, email_client, session_store)
+    let application = Application::build(config, Arc::new(email_client), session_store)
         .await
         .unwrap();
     application.run_until_stopped().await.unwrap();

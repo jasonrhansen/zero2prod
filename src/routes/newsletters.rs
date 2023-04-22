@@ -5,14 +5,16 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use tracing::warn;
 
-use crate::{app_state::AppState, domain::SubscriberEmail, email_client::EmailClient};
+use crate::{app_state::AppState, domain::SubscriberEmail};
 
+/// This is the body of the request to the `publish_newsletter` handler.
 #[derive(Deserialize)]
 pub struct BodyData {
     title: String,
     content: String,
 }
 
+/// This is the error type returned by the `publish_newsletter` handler.
 #[derive(Debug, thiserror::Error)]
 pub enum PublishError {
     #[error("Authentication failed")]
@@ -35,13 +37,11 @@ impl IntoResponse for PublishError {
     }
 }
 
-pub async fn publish_newsletter<E>(
-    State(state): State<AppState<E>>,
+/// This handler publishes a newsletter to all confirmed subscribers.
+pub async fn publish_newsletter(
+    State(state): State<AppState>,
     body: Json<BodyData>,
-) -> Result<StatusCode, PublishError>
-where
-    E: EmailClient + Clone,
-{
+) -> Result<StatusCode, PublishError> {
     let subscribers = get_confirmed_subscribers(&state.db_pool).await?;
     for subscriber in subscribers {
         state

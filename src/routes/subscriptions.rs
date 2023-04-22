@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     domain::{NewSubscriber, SubscriberEmail, SubscriberName},
-    email_client::{self, EmailClient},
+    email_client::{self, DynEmailClient},
 };
 
 #[derive(Deserialize)]
@@ -67,13 +67,10 @@ impl From<String> for SubscribeError {
         subscriber_name = %form.name
     )
 )]
-pub async fn subscribe<E>(
-    State(state): State<AppState<E>>,
+pub async fn subscribe(
+    State(state): State<AppState>,
     Form(form): Form<SubscriptionFormData>,
-) -> Result<StatusCode, SubscribeError>
-where
-    E: EmailClient + Clone,
-{
+) -> Result<StatusCode, SubscribeError> {
     let new_subscriber: NewSubscriber = form.try_into()?;
     let mut transaction = state
         .db_pool
@@ -108,15 +105,12 @@ where
     name = "Send a confirmation email to a new subscriber",
     skip(email_client, new_subscriber, base_url, confirmation_token)
 )]
-pub async fn send_confirmation_email<E>(
-    email_client: E,
+pub async fn send_confirmation_email(
+    email_client: DynEmailClient,
     new_subscriber: NewSubscriber,
     base_url: &str,
     confirmation_token: &str,
-) -> Result<(), email_client::SendEmailError>
-where
-    E: EmailClient + Clone,
-{
+) -> Result<(), email_client::SendEmailError> {
     let confirmation_link =
         format!("{base_url}/subscriptions/confirm?subscription_token={confirmation_token}");
 
