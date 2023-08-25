@@ -16,7 +16,7 @@ hyper = { version = "0.14", features = ["full"] }
 tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.4", features = ["full"] }
 axum = { version = "0.6", features = ["macros", "headers"] }
-axum-flash = "0.6.0"
+axum-flash = "0.7.0"
 axum-sessions = "0.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -36,13 +36,13 @@ anyhow = "1.0"
 rand = { version = "0.8", features = ["std_rng"] }
 thiserror = "1"
 argon2 = { version = "0.5", features = ["std"] }
-async-fred-session = "0.1"
-fred = "5.2"
+async-fred-session = "0.1.5"
+fred = "6.3"
 async-session = "3.0"
 askama = "0.12"
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 features = [
   "runtime-tokio-rustls",
@@ -51,7 +51,6 @@ features = [
   "uuid",
   "chrono",
   "migrate",
-  "offline"
 ]
 
 [dependencies.reqwest]

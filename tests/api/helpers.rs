@@ -271,8 +271,8 @@ pub async fn spawn_app() -> TestApp {
 
 async fn setup_redis_session_store(config: &Settings) -> RedisSessionStore {
     let redis_config = RedisConfig::from_url(config.redis_uri.expose_secret().as_ref()).unwrap();
-    let redis_pool = RedisPool::new(redis_config, 1).unwrap();
-    redis_pool.connect(None);
+    let redis_pool = RedisPool::new(redis_config, None, None, 1).unwrap();
+    redis_pool.connect();
     redis_pool.wait_for_connect().await.unwrap();
 
     RedisSessionStore::from_pool(redis_pool, Some("async-fred-session/".into()))
